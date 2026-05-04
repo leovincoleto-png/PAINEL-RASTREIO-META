@@ -10,19 +10,27 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 const PORT = process.env.PORT || 3000;
 
 const KOMMO_SUBDOMAIN = process.env.KOMMO_SUBDOMAIN;
 const KOMMO_TOKEN = process.env.KOMMO_TOKEN;
 
-const RECEPTION_PIPELINE_NAME = process.env.RECEPTION_PIPELINE_NAME || "RECEPCAO";
-const SURGERY_PIPELINE_NAME = process.env.SURGERY_PIPELINE_NAME || "EXECUSAO DE CIRURGIA";
+const RECEPTION_PIPELINE_NAME = process.env.RECEPTION_PIPELINE_NAME || "RECEPÇÃO";
+const SURGERY_PIPELINE_NAME = process.env.SURGERY_PIPELINE_NAME || "EXECUÇÃO DE CIRURGIA";
 
 const RECEPTION_PIPELINE_ID = process.env.RECEPTION_PIPELINE_ID ? Number(process.env.RECEPTION_PIPELINE_ID) : null;
 const SURGERY_PIPELINE_ID = process.env.SURGERY_PIPELINE_ID ? Number(process.env.SURGERY_PIPELINE_ID) : null;
 
 const WON_STATUS_ID = process.env.WON_STATUS_ID ? Number(process.env.WON_STATUS_ID) : null;
 const WON_STATUS_NAME = process.env.WON_STATUS_NAME || "Fechado ganho";
+
+const PROCEDURE_PIPELINE_ID = process.env.PROCEDURE_PIPELINE_ID ? Number(process.env.PROCEDURE_PIPELINE_ID) : 12054015;
+const PROCEDURE_FIELD_NAME = process.env.PROCEDURE_FIELD_NAME || "Procedimento";
+const PROCEDURE_FIELD_CODE = process.env.PROCEDURE_FIELD_CODE || "";
 
 function requiredEnv() {
   if (!KOMMO_SUBDOMAIN || !KOMMO_TOKEN) {
@@ -31,30 +39,33 @@ function requiredEnv() {
 }
 
 function toUnixStart(dateString) {
-  const d = new Date(`${dateString}T00:00:00`);
-  return Math.floor(d.getTime() / 1000);
+  return Math.floor(new Date(`${dateString}T00:00:00`).getTime() / 1000);
 }
 
 function toUnixEnd(dateString) {
-  const d = new Date(`${dateString}T23:59:59`);
-  return Math.floor(d.getTime() / 1000);
+  return Math.floor(new Date(`${dateString}T23:59:59`).getTime() / 1000);
 }
 
 function currentMonthRange() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
   const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
   const pad = (n) => String(n).padStart(2, "0");
   const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
   return { from: fmt(from), to: fmt(to) };
 }
 
 async function kommoFetch(endpoint) {
   requiredEnv();
 
-  const url = `https://${KOMMO_SUBDOMAIN}.kommo.com${endpoint}`;
+  const cleanSubdomain = String(KOMMO_SUBDOMAIN)
+    .replace("https://", "")
+    .replace("http://", "")
+    .replace(".kommo.com", "")
+    .replaceAll("/", "")
+    .trim();
+
+  const url = `https://${cleanSubdomain}.kommo.com${endpoint}`;
 
   const response = await fetch(url, {
     headers: {
@@ -81,24 +92,23 @@ function normalize(value) {
 
 function getFieldValue(lead, wantedNames = [], wantedCodes = []) {
   const fields = lead.custom_fields_values || [];
-
-  const normalizedNames = wantedNames.map(normalize);
-  const normalizedCodes = wantedCodes.map(normalize);
+  const normalizedNames = wantedNames.filter(Boolean).map(normalize);
+  const normalizedCodes = wantedCodes.filter(Boolean).map(normalize);
 
   for (const field of fields) {
     const fieldName = normalize(field.field_name);
     const fieldCode = normalize(field.field_code);
 
-    const isMatch =
-      normalizedNames.includes(fieldName) ||
-      normalizedCodes.includes(fieldCode);
-
+    const isMatch = normalizedNames.includes(fieldName) || normalizedCodes.includes(fieldCode);
     if (!isMatch) continue;
 
-    const first = field.values && field.values[0];
-    if (!first) return "";
+    const values = field.values || [];
+    if (!values.length) return "";
 
-    return first.value || first.enum_code || first.enum_id || "";
+    return values
+      .map((item) => item.value || item.enum_code || item.enum_id || "")
+      .filter(Boolean)
+      .join(", ");
   }
 
   return "";
@@ -106,25 +116,37 @@ function getFieldValue(lead, wantedNames = [], wantedCodes = []) {
 
 function getUtm(lead, key) {
   const map = {
-    source: {
-      names: ["utm_source", "UTM Source", "UTM_SOURCE", "source"],
-      codes: ["UTM_SOURCE"]
-    },
-    medium: {
-      names: ["utm_medium", "UTM Medium", "UTM_MEDIUM", "medium"],
-      codes: ["UTM_MEDIUM"]
-    },
-    campaign: {
-      names: ["utm_campaign", "UTM Campaign", "UTM_CAMPAIGN", "campaign"],
-      codes: ["UTM_CAMPAIGN"]
-    },
-    content: {
-      names: ["utm_content", "UTM Content", "UTM_CONTENT", "content"],
-      codes: ["UTM_CONTENT"]
-    }
+    source: { names: ["utm_source", "UTM Source", "UTM_SOURCE", "source"], codes: ["UTM_SOURCE"] },
+    medium: { names: ["utm_medium", "UTM Medium", "UTM_MEDIUM", "medium"], codes: ["UTM_MEDIUM"] },
+    campaign: { names: ["utm_campaign", "UTM Campaign", "UTM_CAMPAIGN", "campaign"], codes: ["UTM_CAMPAIGN"] },
+    content: { names: ["utm_content", "UTM Content", "UTM_CONTENT", "content"], codes: ["UTM_CONTENT"] }
   };
-
   return getFieldValue(lead, map[key].names, map[key].codes);
+}
+
+function getProcedure(lead) {
+  return getFieldValue(
+    lead,
+    [
+      PROCEDURE_FIELD_NAME,
+      "Procedimento",
+      "Procedimentos",
+      "Procedimento Cirúrgico",
+      "Procedimentos Cirúrgicos",
+      "Procedimento cirurgico",
+      "Procedimentos cirurgicos",
+      "Cirurgia",
+      "Tipo de cirurgia"
+    ],
+    [
+      PROCEDURE_FIELD_CODE,
+      "PROCEDIMENTO",
+      "PROCEDIMENTOS",
+      "PROCEDIMENTO_CIRURGICO",
+      "PROCEDIMENTOS_CIRURGICOS",
+      "CIRURGIA"
+    ]
+  );
 }
 
 async function getPipelines() {
@@ -137,7 +159,6 @@ function findPipeline(pipelines, preferredId, wantedName) {
     const byId = pipelines.find((p) => Number(p.id) === Number(preferredId));
     if (byId) return byId;
   }
-
   const wanted = normalize(wantedName);
   return pipelines.find((p) => normalize(p.name) === wanted || normalize(p.name).includes(wanted));
 }
@@ -162,7 +183,6 @@ function findWonStatusId(pipeline) {
 async function getAllLeads({ from, to }) {
   const fromTs = toUnixStart(from);
   const toTs = toUnixEnd(to);
-
   const all = [];
   let page = 1;
   const limit = 250;
@@ -182,8 +202,6 @@ async function getAllLeads({ from, to }) {
     if (!next || leads.length === 0) break;
 
     page += 1;
-
-    // trava de segurança para evitar loop infinito
     if (page > 80) break;
   }
 
@@ -202,14 +220,15 @@ function makeEmptyRow(campaign, content) {
     recepcao_fechado_ganho: 0,
     recepcao_valor_total: 0,
     cirurgia_fechado_ganho: 0,
-    cirurgia_valor_total: 0
+    cirurgia_valor_total: 0,
+    procedimentos: [],
+    _procedimentosSet: new Set()
   };
 }
 
 app.get("/api/meta-campaigns", async (req, res) => {
   try {
     const defaultRange = currentMonthRange();
-
     const from = req.query.from || defaultRange.from;
     const to = req.query.to || defaultRange.to;
 
@@ -223,7 +242,7 @@ app.get("/api/meta-campaigns", async (req, res) => {
     }
 
     if (!surgeryPipeline) {
-      throw new Error(`Funil EXECUSAO DE CIRURGIA não encontrado. Configure SURGERY_PIPELINE_ID ou SURGERY_PIPELINE_NAME.`);
+      throw new Error(`Funil EXECUÇÃO DE CIRURGIA não encontrado. Configure SURGERY_PIPELINE_ID ou SURGERY_PIPELINE_NAME.`);
     }
 
     const receptionWonStatusId = findWonStatusId(receptionPipeline);
@@ -234,7 +253,6 @@ app.get("/api/meta-campaigns", async (req, res) => {
     const filtered = leads.filter((lead) => {
       const source = normalize(getUtm(lead, "source"));
       const medium = normalize(getUtm(lead, "medium"));
-
       return source === "meta_ads" && medium === "mensagem";
     });
 
@@ -270,9 +288,20 @@ app.get("/api/meta-campaigns", async (req, res) => {
         grouped[key].cirurgia_fechado_ganho += 1;
         grouped[key].cirurgia_valor_total += price;
       }
+
+      if (pipelineId === Number(PROCEDURE_PIPELINE_ID) && isSurgeryWon) {
+        const procedure = getProcedure(lead);
+        if (procedure) grouped[key]._procedimentosSet.add(procedure);
+      }
     }
 
-    const rows = Object.values(grouped).sort((a, b) => b.leads_total - a.leads_total);
+    const rows = Object.values(grouped)
+      .map((row) => {
+        row.procedimentos = Array.from(row._procedimentosSet).sort();
+        delete row._procedimentosSet;
+        return row;
+      })
+      .sort((a, b) => b.leads_total - a.leads_total);
 
     const totals = rows.reduce(
       (acc, row) => {
@@ -308,6 +337,11 @@ app.get("/api/meta-campaigns", async (req, res) => {
           id: surgeryPipeline.id,
           name: surgeryPipeline.name,
           won_status_id: surgeryWonStatusId
+        },
+        procedure: {
+          id: PROCEDURE_PIPELINE_ID,
+          field_name: PROCEDURE_FIELD_NAME,
+          field_code: PROCEDURE_FIELD_CODE
         }
       },
       totals,
