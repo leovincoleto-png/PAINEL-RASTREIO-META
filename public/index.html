@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Painel Meta Ads - Kommo</title>
+
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --green: #16a34a;
+      --shadow: 0 10px 30px rgba(15, 23, 42, .08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      padding: 18px;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 22px;
+      margin: 0 0 6px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .filters {
+      display: flex;
+      gap: 8px;
+      align-items: end;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    input {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .card .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .card .value {
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .card .money { color: var(--green); }
+
+    .tableCard {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .tableHeader {
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tableHeader strong { font-size: 15px; }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      background: #f9fafb;
+      color: #374151;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .procedure {
+      max-width: 260px;
+      white-space: normal;
+      line-height: 1.35;
+      color: #374151;
+    }
+
+    .empty, .error {
+      padding: 18px;
+      color: var(--muted);
+    }
+
+    .error {
+      color: #b91c1c;
+      background: #fef2f2;
+      border-top: 1px solid #fecaca;
+    }
+
+    @media (max-width: 900px) {
+      .header { display: block; }
+      .filters {
+        justify-content: flex-start;
+        margin-top: 12px;
+      }
+      .cards { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+      table { min-width: 1040px; }
+      .tableCard { overflow-x: auto; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1>Painel de Campanhas Meta Ads</h1>
+        <div class="subtitle">
+          Filtro fixo: <strong>utm_source=meta_ads</strong> e <strong>utm_medium=mensagem</strong>.
+          Agrupamento por <strong>unidade</strong> e <strong>campanha</strong>.
+        </div>
+      </div>
+
+      <div class="filters">
+        <div>
+          <label for="from">De</label>
+          <input id="from" type="date" />
+        </div>
+
+        <div>
+          <label for="to">Até</label>
+          <input id="to" type="date" />
+        </div>
+
+        <button onclick="loadData()">Atualizar</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">Leads Meta</div>
+        <div id="totalLeads" class="value">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Ganhos Recepção</div>
+        <div id="totalRecepcaoGanhos" class="value">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Valor Recepção</div>
+        <div id="totalRecepcaoValor" class="value money">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Ganhos Cirurgia</div>
+        <div id="totalCirurgiaGanhos" class="value">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Valor Cirurgia</div>
+        <div id="totalCirurgiaValor" class="value money">-</div>
+      </div>
+    </div>
+
+    <div class="tableCard">
+      <div class="tableHeader">
+        <strong>Resultado por unidade e campanha</strong>
+        <span id="status" class="status">Carregando...</span>
+      </div>
+
+      <div id="tableArea"></div>
+    </div>
+  </div>
+
+  <script>
+    const brl = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL"
+    });
+
+    function setCurrentMonth() {
+      const now = new Date();
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      document.getElementById("from").value = fmt(first);
+      document.getElementById("to").value = fmt(last);
+    }
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function formatProcedures(procedures) {
+      if (!procedures || !procedures.length) return "-";
+      return procedures.map(escapeHtml).join("<br>");
+    }
+
+    function renderTable(rows) {
+      if (!rows.length) {
+        return `<div class="empty">Nenhum lead encontrado para o período e UTMs selecionadas.</div>`;
+      }
+
+      return `
+        <table>
+          <thead>
+            <tr>
+              <th>Unidade</th>
+              <th>Campanha</th>
+              <th class="num">Leads</th>
+              <th class="num">Ganhos Recepção</th>
+              <th class="num">Valor Recepção</th>
+              <th class="num">Ganhos Cirurgia</th>
+              <th class="num">Valor Cirurgia</th>
+              <th>Procedimento</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td>${escapeHtml(row.utm_campaign)}</td>
+                <td>${escapeHtml(row.utm_content)}</td>
+                <td class="num">${row.leads_total}</td>
+                <td class="num">${row.recepcao_fechado_ganho}</td>
+                <td class="num">${brl.format(row.recepcao_valor_total || 0)}</td>
+                <td class="num">${row.cirurgia_fechado_ganho}</td>
+                <td class="num">${brl.format(row.cirurgia_valor_total || 0)}</td>
+                <td class="procedure">${formatProcedures(row.procedimentos)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function loadData() {
+      const from = document.getElementById("from").value;
+      const to = document.getElementById("to").value;
+
+      setText("status", "Carregando...");
+      document.getElementById("tableArea").innerHTML = "";
+
+      try {
+        const response = await fetch(`/api/meta-campaigns?from=${from}&to=${to}`);
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+          throw new Error(data.message || "Erro ao carregar dados.");
+        }
+
+        setText("totalLeads", data.totals.leads_total);
+        setText("totalRecepcaoGanhos", data.totals.recepcao_fechado_ganho);
+        setText("totalRecepcaoValor", brl.format(data.totals.recepcao_valor_total || 0));
+        setText("totalCirurgiaGanhos", data.totals.cirurgia_fechado_ganho);
+        setText("totalCirurgiaValor", brl.format(data.totals.cirurgia_valor_total || 0));
+
+        document.getElementById("tableArea").innerHTML = renderTable(data.rows);
+
+        setText(
+          "status",
+          `${data.period.from} até ${data.period.to} · Recepção: ${data.pipelines.reception.name} · Cirurgia: ${data.pipelines.surgery.name}`
+        );
+      } catch (error) {
+        console.error(error);
+        document.getElementById("tableArea").innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`;
+        setText("status", "Erro");
+      }
+    }
+
+    setCurrentMonth();
+    loadData();
+  </script>
+</body>
+</html>
